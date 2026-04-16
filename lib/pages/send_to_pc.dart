@@ -32,8 +32,8 @@ class _SendToPcPageState extends State<SendToPcPage> {
   List<FilePrintOptions> fileOptions = [];
   bool sending = false;
 
-  // CHANGE to your PC IP
-  final String serverUrl = 'http://192.168.23.45:5000/print';
+  // 🔥 CHANGE THIS TO YOUR PC IP
+  final String serverUrl = 'http://192.168.0.105:5000/print';
 
   @override
   void initState() {
@@ -44,14 +44,15 @@ class _SendToPcPageState extends State<SendToPcPage> {
   }
 
   Future<void> sendFiles() async {
-    setState(() {
-      sending = true;
-    });
+    setState(() => sending = true);
 
     try {
-      var request = http.MultipartRequest('POST', Uri.parse(serverUrl));
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse(serverUrl),
+      );
 
-      // Add files
+      // ✅ Add files
       for (var fileOpt in fileOptions) {
         request.files.add(
           await http.MultipartFile.fromPath(
@@ -62,37 +63,31 @@ class _SendToPcPageState extends State<SendToPcPage> {
         );
       }
 
-      // Add JSON metadata for all files
-      List<Map<String, dynamic>> metadata = fileOptions
-          .map((e) => e.toMap())
-          .toList();
+      // ✅ Add metadata
+      List<Map<String, dynamic>> metadata =
+      fileOptions.map((e) => e.toMap()).toList();
+
       request.fields['metadata'] = jsonEncode(metadata);
 
       var response = await request.send();
 
-      setState(() {
-        sending = false;
-      });
+      setState(() => sending = false);
 
       if (response.statusCode == 200) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Files and options sent successfully')),
+          const SnackBar(content: Text('Files sent & printed successfully')),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to send (code ${response.statusCode})'),
-          ),
+          SnackBar(content: Text('Failed: ${response.statusCode}')),
         );
       }
     } catch (e) {
-      setState(() {
-        sending = false;
-      });
+      setState(() => sending = false);
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
     }
   }
 
@@ -109,6 +104,7 @@ class _SendToPcPageState extends State<SendToPcPage> {
                 itemCount: fileOptions.length,
                 itemBuilder: (context, index) {
                   final fileOpt = fileOptions[index];
+
                   return Card(
                     margin: const EdgeInsets.symmetric(vertical: 8),
                     child: Padding(
@@ -118,9 +114,12 @@ class _SendToPcPageState extends State<SendToPcPage> {
                         children: [
                           Text(
                             fileOpt.file.path.split('/').last,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 10),
+
+                          // Copies
                           Row(
                             children: [
                               const Text('Copies:'),
@@ -141,6 +140,8 @@ class _SendToPcPageState extends State<SendToPcPage> {
                               ),
                             ],
                           ),
+
+                          // Color toggle
                           Row(
                             children: [
                               const Text('Color printing'),
@@ -159,12 +160,13 @@ class _SendToPcPageState extends State<SendToPcPage> {
                 },
               ),
             ),
+
             sending
                 ? const CircularProgressIndicator()
                 : ElevatedButton(
-                    onPressed: sendFiles,
-                    child: const Text('Send all to PC'),
-                  ),
+              onPressed: sendFiles,
+              child: const Text('Send all to PC'),
+            ),
           ],
         ),
       ),
