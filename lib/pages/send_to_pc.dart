@@ -17,13 +17,24 @@ class FilePrintOptions {
   int copies;
   bool color;
 
-  FilePrintOptions({required this.file, this.copies = 1, this.color = true});
+  // NEW
+  String pages;
+
+  FilePrintOptions({
+    required this.file,
+    this.copies = 1,
+    this.color = true,
+    this.pages = '',
+  });
 
   Map<String, dynamic> toMap() {
     return {
       'filename': file.path.split('/').last,
       'copies': copies,
       'color': color ? 'color' : 'bw',
+
+      // NEW
+      'pages': pages,
     };
   }
 }
@@ -31,6 +42,7 @@ class FilePrintOptions {
 class _SendToPcPageState extends State<SendToPcPage> {
   List<FilePrintOptions> fileOptions = [];
   bool sending = false;
+  final TextEditingController mobileController = TextEditingController();
 
   // 🔥 CHANGE THIS TO YOUR PC IP
   final String serverUrl = 'http://192.168.0.105:5000/print';
@@ -43,7 +55,39 @@ class _SendToPcPageState extends State<SendToPcPage> {
         .toList();
   }
 
+  bool isValidPageRange(String value) {
+    if (value.trim().isEmpty) {
+      return true;
+    }
+
+    final regex = RegExp(r'^(\d+(-\d+)?)(,\d+(-\d+)?)*$');
+
+    return regex.hasMatch(value.replaceAll(' ', ''));
+  }
+
   Future<void> sendFiles() async {
+
+    if (mobileController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a mobile number'),
+        ),
+      );
+      return;
+    }
+
+    for (var fileOpt in fileOptions) {
+      if (!isValidPageRange(fileOpt.pages)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Invalid page range for ${fileOpt.file.path.split('/').last}',
+            ),
+          ),
+        );
+        return;
+      }
+    }
     setState(() => sending = true);
 
     try {
@@ -68,6 +112,7 @@ class _SendToPcPageState extends State<SendToPcPage> {
       fileOptions.map((e) => e.toMap()).toList();
 
       request.fields['metadata'] = jsonEncode(metadata);
+      request.fields['mobile'] = mobileController.text.trim();
 
       var response = await request.send();
 
@@ -99,6 +144,18 @@ class _SendToPcPageState extends State<SendToPcPage> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
+            TextField(
+              controller: mobileController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'Mobile Number',
+                hintText: 'Enter customer mobile number',
+                prefixIcon: Icon(Icons.phone),
+                border: OutlineInputBorder(),
+              ),
+            ),
+
+            const SizedBox(height: 20),
             Expanded(
               child: ListView.builder(
                 itemCount: fileOptions.length,
@@ -118,6 +175,19 @@ class _SendToPcPageState extends State<SendToPcPage> {
                                 fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 10),
+
+                          TextField(
+                            decoration: const InputDecoration(
+                              labelText: 'Pages',
+                              hintText: 'Example: 1-5 or 1,3,5-8',
+                              border: OutlineInputBorder(),
+                            ),
+                            onChanged: (value) {
+                              fileOpt.pages = value;
+                            },
+                          ),
+
+                          const SizedBox(height: 15),
 
                           // Copies
                           Row(
@@ -171,5 +241,10 @@ class _SendToPcPageState extends State<SendToPcPage> {
         ),
       ),
     );
+  }
+  @override
+  void dispose() {
+    mobileController.dispose();
+    super.dispose();
   }
 }

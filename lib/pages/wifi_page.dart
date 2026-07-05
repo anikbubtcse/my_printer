@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:my_printer/pages/pdf_select_page.dart';
 import 'package:wifi_iot/wifi_iot.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 class WifiConnectPage extends StatefulWidget {
   final String qrData;
@@ -25,6 +24,7 @@ class _WifiConnectPageState extends State<WifiConnectPage> {
     try {
       final data = widget.qrData;
 
+      // Example: WIFI:T:WPA;S:MyWifi;P:Password;;
       final ssidMatch = RegExp(r'S:([^;]+)').firstMatch(data);
       final passMatch = RegExp(r'P:([^;]+)').firstMatch(data);
 
@@ -39,57 +39,45 @@ class _WifiConnectPageState extends State<WifiConnectPage> {
     }
   }
 
-  Future<void> openWifiSettings() async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Please connect manually using device WiFi settings.')),
-    );
-    await WiFiForIoTPlugin.forceWifiUsage(true); // ensures app routes traffic via WiFi
-    await WiFiForIoTPlugin.setEnabled(true, shouldOpenSettings: true);
-  }
+  Future<void> connectWifi() async {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Connecting to WiFi...')));
 
-  Future<bool> requestLocationPermission() async {
-    final status = await Permission.locationWhenInUse.status;
-    if (!status.isGranted) {
-      final result = await Permission.locationWhenInUse.request();
-      return result.isGranted;
-    }
-    return true;
-  }
-
-  Future<void> confirmConnection() async {
-    bool granted = await requestLocationPermission();
-    if (!granted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Location permission is required to detect WiFi SSID')),
+    try {
+      await WiFiForIoTPlugin.connect(
+        ssid,
+        password: password,
+        security: NetworkSecurity.WPA,
+        withInternet: false,
       );
-      return;
-    }
 
-    String? connectedSSID = await WiFiForIoTPlugin.getSSID();
+      // Wait until Android finishes connection
+      await Future.delayed(const Duration(seconds: 4));
 
-    if (connectedSSID == null || connectedSSID.isEmpty || connectedSSID.toLowerCase() == 'unknown ssid') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to detect connected WiFi. Please ensure you are connected.')),
-      );
-      return;
-    }
+      // Check connection
+      final isConnected = await WiFiForIoTPlugin.isConnected();
 
-    // Normalize SSID
-    String normalizedSSID = connectedSSID.replaceAll('"', '').trim();
+      if (isConnected) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('WiFi Connected')));
 
-    if (normalizedSSID.toLowerCase() == ssid.toLowerCase()) {
-      if (!mounted) return;
-      Navigator.push(
+        if (!mounted) return;
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const PdfSelectPage()),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to connect to WiFi')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
         context,
-        MaterialPageRoute(builder: (_) => const PdfSelectPage()),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-              'Connected to "$normalizedSSID", not the expected "$ssid". Please connect to correct WiFi.'),
-        ),
-      );
+      ).showSnackBar(SnackBar(content: Text('WiFi error: $e')));
     }
   }
 
@@ -105,13 +93,8 @@ class _WifiConnectPageState extends State<WifiConnectPage> {
             Text('Password: $password'),
             const SizedBox(height: 20),
             ElevatedButton(
-              onPressed: openWifiSettings,
-              child: const Text('Open WiFi Settings'),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: confirmConnection,
-              child: const Text('I am connected'),
+              onPressed: connectWifi,
+              child: const Text('Connect'),
             ),
           ],
         ),
