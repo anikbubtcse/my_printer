@@ -32,6 +32,7 @@ dependencies:
     sdk: flutter
   mobile_scanner:
   wifi_iot:
+  app_settings:
   file_picker:
   http:
   permission_handler:
