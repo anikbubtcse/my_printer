@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:app_settings/app_settings.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:wifi_iot/wifi_iot.dart';
 import 'package:my_printer/pages/pdf_select_page.dart';
 
@@ -45,16 +46,59 @@ class _WifiConnectPageState extends State<WifiConnectPage> {
 
   Future<void> checkConnection() async {
     try {
+      // 1. Check & Request Location Permission (Required for SSID on Android)
+      final status = await Permission.location.status;
+      if (!status.isGranted) {
+        final result = await Permission.location.request();
+        if (!result.isGranted) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Location permission is required to verify WiFi."),
+            ),
+          );
+          return;
+        }
+      }
+
+      // 2. Check if WiFi is even enabled
+      final isEnabled = await WiFiForIoTPlugin.isEnabled();
+      if (!isEnabled) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Please enable WiFi first."),
+          ),
+        );
+        return;
+      }
+
+      // 3. Get Current SSID
       final currentSSID = await WiFiForIoTPlugin.getSSID();
+      debugPrint("DEBUG: Connected SSID is '$currentSSID'");
 
       final connectedSSID = currentSSID?.replaceAll('"', '');
 
       if (!mounted) return;
 
+      // 4. Handle '<unknown ssid>' - usually means Location Services (GPS) is OFF
+      if (connectedSSID == '<unknown ssid>') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              "Cannot read WiFi name. Please ensure Location/GPS is turned ON.",
+            ),
+            duration: Duration(seconds: 5),
+          ),
+        );
+        return;
+      }
+
+      // 5. Compare and Navigate
       if (connectedSSID == ssid) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("WiFi Connected"),
+            content: Text("WiFi Connected Successfully"),
           ),
         );
 
@@ -68,12 +112,14 @@ class _WifiConnectPageState extends State<WifiConnectPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              "Please connect to '$ssid' before continuing.",
+              "Currently connected to '$connectedSSID'. Please connect to '$ssid'.",
             ),
           ),
         );
       }
     } catch (e) {
+      debugPrint("CheckConnection Error: $e");
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text("Error checking WiFi: $e"),
